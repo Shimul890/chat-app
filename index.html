@@ -1,0 +1,711 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anonymous Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: #ffffff;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        body.dark {
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            background: #f5f5f5;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: 80vh;
+            transition: background 0.3s;
+        }
+
+        body.dark .container {
+            background: #2a2a2a;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .header {
+            padding: 15px 20px;
+            background: #007bff;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+
+        .header .online {
+            font-size: 0.9rem;
+        }
+
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+
+        .toggle-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .chat-area {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .message {
+            max-width: 70%;
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            line-height: 1.4;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .message.sent {
+            background: #007bff;
+            color: white;
+            align-self: flex-end;
+            border-bottom-right-radius: 2px;
+        }
+
+        .message.received {
+            background: #e0e0e0;
+            color: #333;
+            align-self: flex-start;
+            border-bottom-left-radius: 2px;
+        }
+
+        body.dark .message.received {
+            background: #3a3a3a;
+            color: #e0e0e0;
+        }
+
+        .message img {
+            max-width: 100%;
+            border-radius: 5px;
+        }
+
+        .message .info {
+            font-size: 0.75rem;
+            color: #aaa;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .message.sent .info {
+            color: #ddd;
+        }
+
+        .message .info img {
+            width: 16px;
+            height: 12px;
+        }
+
+        .message .info i {
+            font-size: 1rem;
+        }
+
+        .typing {
+            text-align: center;
+            color: #888;
+            font-size: 0.85rem;
+            margin: 10px 0;
+            display: none;
+        }
+
+        .typing i {
+            margin-right: 5px;
+        }
+
+        .status {
+            text-align: center;
+            color: #888;
+            font-size: 0.85rem;
+            margin: 10px 0;
+        }
+
+        .input-area {
+            display: flex;
+            padding: 15px;
+            background: #f0f0f0;
+            border-top: 1px solid #ddd;
+            transition: background 0.3s;
+            align-items: center;
+        }
+
+        body.dark .input-area {
+            background: #222;
+            border-top: 1px solid #444;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            outline: none;
+            font-size: 0.9rem;
+            background: #fff;
+            transition: background 0.3s;
+        }
+
+        body.dark .input-area input {
+            background: #333;
+            border: 1px solid #555;
+            color: #e0e0e0;
+        }
+
+        .input-area button {
+            background: none;
+            border: none;
+            color: #007bff;
+            font-size: 1.2rem;
+            margin-left: 10px;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+
+        .input-area button:hover {
+            transform: scale(1.1);
+        }
+
+        .input-area button.disconnect {
+            color: #ff4d4d;
+        }
+
+        .popup {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .popup-content {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 400px;
+            position: relative;
+            transition: background 0.3s;
+        }
+
+        body.dark .popup-content {
+            background: #2a2a2a;
+        }
+
+        .popup-content h2 {
+            font-size: 1.2rem;
+            margin-bottom: 15px;
+        }
+
+        .popup-content select,
+        .popup-content button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+
+        .popup-content select {
+            background: #fff;
+            transition: background 0.3s;
+        }
+
+        body.dark .popup-content select {
+            background: #333;
+            color: #e0e0e0;
+            border: 1px solid #555;
+        }
+
+        .popup-content button {
+            background: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .popup-content button:hover {
+            background: #0056b3;
+        }
+
+        .popup-content .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            color: #333;
+            font-size: 1.2rem;
+            border: none;
+            cursor: pointer;
+        }
+
+        body.dark .popup-content .close-btn {
+            color: #e0e0e0;
+        }
+
+        .sticker-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .sticker-content {
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            transition: background 0.3s;
+        }
+
+        body.dark .sticker-content {
+            background: #2a2a2a;
+        }
+
+        .sticker-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+        }
+
+        .sticker-grid img {
+            width: 100%;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .sticker-grid img:hover {
+            transform: scale(1.05);
+        }
+
+        @media (max-width: 500px) {
+            .container {
+                height: 100vh;
+                border-radius: 0;
+            }
+
+            .header h1 {
+                font-size: 1rem;
+            }
+
+            .chat-area {
+                padding: 15px;
+            }
+
+            .message {
+                max-width: 80%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="popup" id="userPopup">
+        <div class="popup-content">
+            <button class="close-btn" onclick="closePopup()"><i class="fas fa-times"></i></button>
+            <h2><i class="fas fa-user"></i> Select Your Details</h2>
+            <select id="countrySelect">
+                <option value="">Select Country</option>
+            </select>
+            <select id="genderSelect">
+                <option value="">Select Gender</option>
+                <option value="Male">Male</option>
+                <option value="Female">Female</option>
+                <option value="Other">Other</option>
+            </select>
+            <button onclick="saveUserDetails()"><i class="fas fa-save"></i> Save</button>
+        </div>
+    </div>
+
+    <div class="sticker-modal" id="stickerModal">
+        <div class="sticker-content">
+            <button class="close-btn" onclick="closeStickerModal()"><i class="fas fa-times"></i></button>
+            <div class="sticker-grid" id="stickerGrid"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h1><i class="fas fa-comment-alt"></i> Anonymous Chat</h1>
+            <span class="online" id="onlineCount"><i class="fas fa-users"></i> Online: 0</span>
+            <button class="toggle-btn" onclick="toggleDarkMode()">
+                <i class="fas fa-moon"></i>
+            </button>
+        </div>
+        <div class="chat-area" id="chatArea">
+            <div class="typing" id="typingIndicator"><i class="fas fa-keyboard"></i> Stranger is typing...</div>
+        </div>
+        <div class="input-area">
+            <input type="text" id="messageInput" placeholder="Type a message..." oninput="handleTyping()" onkeypress="handleKeyPress(event)">
+            <button onclick="openStickerModal()">
+                <i class="fas fa-gift"></i>
+            </button>
+            <button onclick="sendMessage()">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+            <button class="disconnect" onclick="disconnect()">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.0/socket.io.min.js"></script>
+    <script src="https://kit.fontawesome.com/a076d05399.js"></script>
+    <script>
+        const socket = io('http://localhost:3000'); // Replace with your signaling server URL
+        let peerConnection;
+        let dataChannel;
+        const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+        const chatArea = document.getElementById('chatArea');
+        const messageInput = document.getElementById('messageInput');
+        const userPopup = document.getElementById('userPopup');
+        const countrySelect = document.getElementById('countrySelect');
+        const genderSelect = document.getElementById('genderSelect');
+        const stickerModal = document.getElementById('stickerModal');
+        const stickerGrid = document.getElementById('stickerGrid');
+        const onlineCount = document.getElementById('onlineCount');
+        const typingIndicator = document.getElementById('typingIndicator');
+        let isConnected = false;
+        let userDetails = JSON.parse(localStorage.getItem('userDetails')) || null;
+        let isTyping = false;
+        const GIPHY_API_KEY = 'YOUR_GIPHY_API_KEY'; // Replace with your GIPHY API key
+
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark');
+            const icon = document.querySelector('.toggle-btn i');
+            icon.classList.toggle('fa-moon');
+            icon.classList.toggle('fa-sun');
+        }
+
+        function closePopup() {
+            userPopup.style.display = 'none';
+        }
+
+        function saveUserDetails() {
+            const country = countrySelect.value;
+            const gender = genderSelect.value;
+            if (country && gender) {
+                userDetails = {
+                    country,
+                    gender,
+                    flag: countrySelect.options[countrySelect.selectedIndex].dataset.flag,
+                    avatar: gender === 'Male' ? 'fa-male' : gender === 'Female' ? 'fa-female' : 'fa-user'
+                };
+                localStorage.setItem('userDetails', JSON.stringify(userDetails));
+                userPopup.style.display = 'none';
+                startChat();
+            } else {
+                alert('Please select both country and gender.');
+            }
+        }
+
+        function openStickerModal() {
+            stickerModal.style.display = 'flex';
+            fetchStickers();
+        }
+
+        function closeStickerModal() {
+            stickerModal.style.display = 'none';
+            stickerGrid.innerHTML = '';
+        }
+
+        function fetchStickers() {
+            fetch(`https://api.giphy.com/v1/stickers/trending?api_key=${GIPHY_API_KEY}&limit=12`)
+                .then(response => response.json())
+                .then(data => {
+                    stickerGrid.innerHTML = '';
+                    data.data.forEach(sticker => {
+                        const img = document.createElement('img');
+                        img.src = sticker.images.fixed_height.url;
+                        img.alt = sticker.title;
+                        img.onclick = () => sendSticker(sticker.images.fixed_height.url);
+                        stickerGrid.appendChild(img);
+                    });
+                })
+                .catch(err => {
+                    console.error('Error fetching stickers:', err);
+                    addStatus('Failed to load stickers.');
+                });
+        }
+
+        function sendSticker(url) {
+            if (isConnected && dataChannel.readyState === 'open') {
+                const message = { type: 'sticker', content: url, userDetails };
+                dataChannel.send(JSON.stringify(message));
+                addMessage(message, true);
+                closeStickerModal();
+            }
+        }
+
+        function handleTyping() {
+            if (!isConnected || !dataChannel || dataChannel.readyState !== 'open') return;
+            if (!isTyping) {
+                isTyping = true;
+                dataChannel.send(JSON.stringify({ type: 'typing', status: true }));
+                setTimeout(() => {
+                    isTyping = false;
+                    dataChannel.send(JSON.stringify({ type: 'typing', status: false }));
+                }, 2000);
+            }
+        }
+
+        function addMessage(message, isSent) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
+            if (message.type === 'sticker') {
+                const img = document.createElement('img');
+                img.src = message.content;
+                messageDiv.appendChild(img);
+            } else {
+                messageDiv.textContent = message.content;
+            }
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'info';
+            if (message.userDetails) {
+                const avatarIcon = document.createElement('i');
+                avatarIcon.className = `fas ${message.userDetails.avatar}`;
+                infoDiv.appendChild(avatarIcon);
+                const flagImg = document.createElement('img');
+                flagImg.src = message.userDetails.flag;
+                infoDiv.appendChild(flagImg);
+                infoDiv.appendChild(document.createTextNode(`${message.userDetails.country} | ${message.userDetails.gender}`));
+            }
+            messageDiv.appendChild(infoDiv);
+            chatArea.insertBefore(messageDiv, typingIndicator);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function addStatus(content) {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = 'status';
+            statusDiv.innerHTML = `<i class="fas fa-info-circle"></i> ${content}`;
+            chatArea.insertBefore(statusDiv, typingIndicator);
+            chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function fetchCountries() {
+            fetch('https://restcountries.com/v3.1/all')
+                .then(response => response.json())
+                .then(data => {
+                    data.sort((a, b) => a.name.common.localeCompare(b.name.common));
+                    countrySelect.innerHTML = '<option value="">Select Country</option>';
+                    data.forEach(country => {
+                        const option = document.createElement('option');
+                        option.value = country.name.common;
+                        option.textContent = country.name.common;
+                        option.dataset.flag = country.flags.png;
+                        countrySelect.appendChild(option);
+                    });
+                })
+                .catch(err => {
+                    console.error('Error fetching countries:', err);
+                    addStatus('Failed to load country list.');
+                });
+        }
+
+        function createPeerConnection() {
+            peerConnection = new RTCPeerConnection(configuration);
+
+            dataChannel = peerConnection.createDataChannel('chat');
+            dataChannel.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                if (message.type === 'typing') {
+                    typingIndicator.style.display = message.status ? 'block' : 'none';
+                } else {
+                    addMessage(message, false);
+                }
+            };
+            dataChannel.onopen = () => {
+                isConnected = true;
+                addStatus('Connected to a stranger!');
+                messageInput.disabled = false;
+                messageInput.focus();
+            };
+            dataChannel.onclose = () => {
+                isConnected = false;
+                addStatus('Disconnected.');
+                messageInput.disabled = true;
+                typingIndicator.style.display = 'none';
+            };
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    socket.emit('ice-candidate', event.candidate);
+                }
+            };
+
+            peerConnection.ondatachannel = (event) => {
+                dataChannel = event.channel;
+                dataChannel.onmessage = (event) => {
+                    const message = JSON.parse(event.data);
+                    if (message.type === 'typing') {
+                        typingIndicator.style.display = message.status ? 'block' : 'none';
+                    } else {
+                        addMessage(message, false);
+                    }
+                };
+                dataChannel.onopen = () => {
+                    isConnected = true;
+                    addStatus('Connected to a stranger!');
+                    messageInput.disabled = false;
+                    messageInput.focus();
+                };
+                dataChannel.onclose = () => {
+                    isConnected = false;
+                    addStatus('Disconnected.');
+                    messageInput.disabled = true;
+                    typingIndicator.style.display = 'none';
+                };
+            };
+        }
+
+        function startChat() {
+            if (!userDetails) {
+                userPopup.style.display = 'flex';
+                return;
+            }
+            createPeerConnection();
+            peerConnection.createOffer()
+                .then((offer) => peerConnection.setLocalDescription(offer))
+                .then(() => socket.emit('offer', peerConnection.localDescription))
+                .catch((err) => addStatus('Error starting chat: ' + err.message));
+        }
+
+        socket.on('offer', async (offer) => {
+            if (!peerConnection) createPeerConnection();
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            socket.emit('answer', answer);
+        });
+
+        socket.on('answer', async (answer) => {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+        });
+
+        socket.on('ice-candidate', async (candidate) => {
+            try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (err) {
+                console.error('Error adding ICE candidate:', err);
+            }
+        });
+
+        socket.on('online', (count) => {
+            onlineCount.innerHTML = `<i class="fas fa-users"></i> Online: ${count}`;
+        });
+
+        socket.on('connect', () => {
+            addStatus('Connecting to server...');
+            if (userDetails) startChat();
+        });
+
+        socket.on('disconnect', () => {
+            addStatus('Server disconnected.');
+            isConnected = false;
+            messageInput.disabled = true;
+            typingIndicator.style.display = 'none';
+        });
+
+        function sendMessage() {
+            const message = messageInput.value.trim();
+            if (message && isConnected && dataChannel.readyState === 'open') {
+                const messageObj = { type: 'text', content: message, userDetails };
+                dataChannel.send(JSON.stringify(messageObj));
+                addMessage(messageObj, true);
+                messageInput.value = '';
+                messageInput.focus();
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function disconnect() {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+                dataChannel = null;
+                isConnected = false;
+                addStatus('Disconnected. Finding a new stranger...');
+                messageInput.disabled = true;
+                typingIndicator.style.display = 'none';
+                startChat();
+            }
+        }
+
+        // Initialize
+        fetchCountries();
+        messageInput.disabled = true;
+        if (!userDetails) {
+            userPopup.style.display = 'flex';
+        } else {
+            startChat();
+        }
+    </script>
+</body>
+  </html>
