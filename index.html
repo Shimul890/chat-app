@@ -82,14 +82,14 @@
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 15px;
         }
 
         .message {
             max-width: 70%;
             padding: 10px 15px;
             border-radius: 10px;
-            font-size: 0.9rem;
+            font-size: 1rem;
             line-height: 1.4;
             position: relative;
             display: flex;
@@ -128,24 +128,28 @@
         }
 
         .message .info {
-            font-size: 0.75rem;
-            color: #aaa;
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 5px;
-        }
-
-        .message.sent .info {
-            color: #ddd;
-        }
-
-        .message .info img {
-            width: 16px;
-            height: 12px;
+            margin-bottom: 5px;
         }
 
         .message .info i {
-            font-size: 1rem;
+            font-size: 2.5rem;
+            color: #007bff;
+        }
+
+        .message.sent .info i {
+            color: #ffffff;
+        }
+
+        .message .info span {
+            font-size: 0.8rem;
+            color: #aaa;
+        }
+
+        .message.sent .info span {
+            color: #ddd;
         }
 
         .typing {
@@ -174,6 +178,7 @@
             border-top: 1px solid #ddd;
             transition: background 0.3s;
             align-items: center;
+            z-index: 10;
         }
 
         body.dark .input-area {
@@ -190,6 +195,7 @@
             font-size: 0.9rem;
             background: #fff;
             transition: background 0.3s;
+            z-index: 10;
         }
 
         body.dark .input-area input {
@@ -199,21 +205,32 @@
         }
 
         .input-area button {
-            background: none;
+            background: #007bff;
             border: none;
-            color: #007bff;
+            color: white;
             font-size: 1.2rem;
             margin-left: 10px;
+            padding: 8px;
+            border-radius: 50%;
             cursor: pointer;
-            transition: transform 0.3s;
+            transition: background 0.3s;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         .input-area button:hover {
-            transform: scale(1.1);
+            background: #0056b3;
         }
 
         .input-area button.disconnect {
-            color: #ff4d4d;
+            background: #ff4d4d;
+        }
+
+        .input-area button.disconnect:hover {
+            background: #cc0000;
         }
 
         .popup {
@@ -340,6 +357,19 @@
             transform: scale(1.05);
         }
 
+        .video-area {
+            display: none;
+            margin: 10px 0;
+            text-align: center;
+        }
+
+        .video-area video {
+            width: 100%;
+            max-width: 300px;
+            border-radius: 10px;
+            border: 1px solid #ddd;
+        }
+
         @media (max-width: 500px) {
             .container {
                 height: 100vh;
@@ -397,12 +427,15 @@
             <div class="typing" id="typingIndicator"><i class="fas fa-keyboard"></i> Stranger is typing...</div>
         </div>
         <div class="input-area">
-            <input type="text" id="messageInput" placeholder="Type a message..." oninput="handleTyping()" onkeypress="handleKeyPress(event)">
+            <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off" autofocus oninput="handleTyping()" onkeypress="handleKeyPress(event)" onclick="this.focus()">
+            <button onclick="startAudioCall()">
+                <i class="fas fa-microphone"></i>
+            </button>
+            <button onclick="startVideoCall()">
+                <i class="fas fa-video"></i>
+            </button>
             <button onclick="openStickerModal()">
                 <i class="fas fa-gift"></i>
-            </button>
-            <button onclick="sendMessage()">
-                <i class="fas fa-paper-plane"></i>
             </button>
             <button class="disconnect" onclick="disconnect()">
                 <i class="fas fa-sign-out-alt"></i>
@@ -413,9 +446,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.0/socket.io.min.js"></script>
     <script src="https://kit.fontawesome.com/a076d05399.js"></script>
     <script>
-        const socket = io('https://chat-server-a5j7.onrender.com'); // Replace with your signaling server URL
+        const socket = io('https://chat-server-a5j7.onrender.com', { reconnectionAttempts: 5 });
         let peerConnection;
         let dataChannel;
+        let localStream;
+        let remoteStream;
         const configuration = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
         const chatArea = document.getElementById('chatArea');
         const messageInput = document.getElementById('messageInput');
@@ -427,6 +462,7 @@
         const onlineCount = document.getElementById('onlineCount');
         const typingIndicator = document.getElementById('typingIndicator');
         let isConnected = false;
+        let isCalling = false;
         let userDetails = JSON.parse(localStorage.getItem('userDetails')) || null;
         let isTyping = false;
         const GIPHY_API_KEY = 'YOUR_GIPHY_API_KEY'; // Replace with your GIPHY API key
@@ -495,6 +531,8 @@
                 dataChannel.send(JSON.stringify(message));
                 addMessage(message, true);
                 closeStickerModal();
+            } else {
+                addStatus('Cannot send sticker: Not connected to a stranger.');
             }
         }
 
@@ -513,25 +551,24 @@
         function addMessage(message, isSent) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${isSent ? 'sent' : 'received'}`;
-            if (message.type === 'sticker') {
-                const img = document.createElement('img');
-                img.src = message.content;
-                messageDiv.appendChild(img);
-            } else {
-                messageDiv.textContent = message.content;
-            }
             const infoDiv = document.createElement('div');
             infoDiv.className = 'info';
             if (message.userDetails) {
                 const avatarIcon = document.createElement('i');
                 avatarIcon.className = `fas ${message.userDetails.avatar}`;
                 infoDiv.appendChild(avatarIcon);
-                const flagImg = document.createElement('img');
-                flagImg.src = message.userDetails.flag;
-                infoDiv.appendChild(flagImg);
-                infoDiv.appendChild(document.createTextNode(`${message.userDetails.country} | ${message.userDetails.gender}`));
+                const countrySpan = document.createElement('span');
+                countrySpan.textContent = message.userDetails.country;
+                infoDiv.appendChild(countrySpan);
             }
             messageDiv.appendChild(infoDiv);
+            if (message.type === 'sticker') {
+                const img = document.createElement('img');
+                img.src = message.content;
+                messageDiv.appendChild(img);
+            } else {
+                messageDiv.appendChild(document.createTextNode(message.content));
+            }
             chatArea.insertBefore(messageDiv, typingIndicator);
             chatArea.scrollTop = chatArea.scrollHeight;
         }
@@ -542,6 +579,20 @@
             statusDiv.innerHTML = `<i class="fas fa-info-circle"></i> ${content}`;
             chatArea.insertBefore(statusDiv, typingIndicator);
             chatArea.scrollTop = chatArea.scrollHeight;
+        }
+
+        function addVideoElement(isLocal) {
+            const videoArea = document.createElement('div');
+            videoArea.className = 'video-area';
+            const video = document.createElement('video');
+            video.id = isLocal ? 'localVideo' : 'remoteVideo';
+            video.autoplay = true;
+            video.muted = isLocal;
+            videoArea.appendChild(video);
+            chatArea.insertBefore(videoArea, typingIndicator);
+            videoArea.style.display = 'block';
+            chatArea.scrollTop = chatArea.scrollHeight;
+            return video;
         }
 
         function fetchCountries() {
@@ -564,14 +615,81 @@
                 });
         }
 
+        async function startAudioCall() {
+            if (isCalling) {
+                stopCall();
+                return;
+            }
+            if (!isConnected || !dataChannel || dataChannel.readyState !== 'open') {
+                addStatus('Cannot start call: Not connected to a stranger.');
+                return;
+            }
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                peerConnection.addStream(localStream);
+                addStatus('Audio call started.');
+                isCalling = true;
+                dataChannel.send(JSON.stringify({ type: 'call', callType: 'audio' }));
+            } catch (err) {
+                console.error('Error starting audio call:', err);
+                addStatus('Failed to start audio call: ' + err.message);
+            }
+        }
+
+        async function startVideoCall() {
+            if (isCalling) {
+                stopCall();
+                return;
+            }
+            if (!isConnected || !dataChannel || dataChannel.readyState !== 'open') {
+                addStatus('Cannot start call: Not connected to a stranger.');
+                return;
+            }
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                peerConnection.addStream(localStream);
+                const localVideo = addVideoElement(true);
+                localVideo.srcObject = localStream;
+                addStatus('Video call started.');
+                isCalling = true;
+                dataChannel.send(JSON.stringify({ type: 'call', callType: 'video' }));
+            } catch (err) {
+                console.error('Error starting video call:', err);
+                addStatus('Failed to start video call: ' + err.message);
+            }
+        }
+
+        function stopCall() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            if (remoteStream) {
+                remoteStream.getTracks().forEach(track => track.stop());
+                remoteStream = null;
+            }
+            const videoAreas = document.querySelectorAll('.video-area');
+            videoAreas.forEach(area => area.remove());
+            isCalling = false;
+            addStatus('Call ended.');
+            if (dataChannel && dataChannel.readyState === 'open') {
+                dataChannel.send(JSON.stringify({ type: 'call_end' }));
+            }
+        }
+
         function createPeerConnection() {
             peerConnection = new RTCPeerConnection(configuration);
+            console.log('Creating peer connection');
 
             dataChannel = peerConnection.createDataChannel('chat');
             dataChannel.onmessage = (event) => {
                 const message = JSON.parse(event.data);
                 if (message.type === 'typing') {
                     typingIndicator.style.display = message.status ? 'block' : 'none';
+                } else if (message.type === 'call') {
+                    handleCallRequest(message.callType);
+                } else if (message.type === 'call_end') {
+                    stopCall();
                 } else {
                     addMessage(message, false);
                 }
@@ -581,17 +699,28 @@
                 addStatus('Connected to a stranger!');
                 messageInput.disabled = false;
                 messageInput.focus();
+                console.log('Data channel opened');
             };
             dataChannel.onclose = () => {
                 isConnected = false;
+                stopCall();
                 addStatus('Disconnected.');
-                messageInput.disabled = true;
+                messageInput.disabled = false;
                 typingIndicator.style.display = 'none';
+                console.log('Data channel closed');
             };
 
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
                     socket.emit('ice-candidate', event.candidate);
+                }
+            };
+
+            peerConnection.onaddstream = (event) => {
+                remoteStream = event.stream;
+                if (remoteStream.getVideoTracks().length > 0) {
+                    const remoteVideo = addVideoElement(false);
+                    remoteVideo.srcObject = remoteStream;
                 }
             };
 
@@ -601,6 +730,10 @@
                     const message = JSON.parse(event.data);
                     if (message.type === 'typing') {
                         typingIndicator.style.display = message.status ? 'block' : 'none';
+                    } else if (message.type === 'call') {
+                        handleCallRequest(message.callType);
+                    } else if (message.type === 'call_end') {
+                        stopCall();
                     } else {
                         addMessage(message, false);
                     }
@@ -610,14 +743,34 @@
                     addStatus('Connected to a stranger!');
                     messageInput.disabled = false;
                     messageInput.focus();
+                    console.log('Data channel opened');
                 };
                 dataChannel.onclose = () => {
                     isConnected = false;
+                    stopCall();
                     addStatus('Disconnected.');
-                    messageInput.disabled = true;
+                    messageInput.disabled = false;
                     typingIndicator.style.display = 'none';
+                    console.log('Data channel closed');
                 };
             };
+        }
+
+        async function handleCallRequest(callType) {
+            try {
+                const constraints = callType === 'audio' ? { audio: true } : { audio: true, video: true };
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                peerConnection.addStream(localStream);
+                if (callType === 'video') {
+                    const localVideo = addVideoElement(true);
+                    localVideo.srcObject = localStream;
+                }
+                addStatus(`${callType.charAt(0).toUpperCase() + callType.slice(1)} call received.`);
+                isCalling = true;
+            } catch (err) {
+                console.error('Error handling call request:', err);
+                addStatus('Failed to accept call: ' + err.message);
+            }
         }
 
         function startChat() {
@@ -629,7 +782,10 @@
             peerConnection.createOffer()
                 .then((offer) => peerConnection.setLocalDescription(offer))
                 .then(() => socket.emit('offer', peerConnection.localDescription))
-                .catch((err) => addStatus('Error starting chat: ' + err.message));
+                .catch((err) => {
+                    console.error('Error starting chat:', err);
+                    addStatus('Error starting chat: ' + err.message);
+                });
         }
 
         socket.on('offer', async (offer) => {
@@ -657,26 +813,42 @@
         });
 
         socket.on('connect', () => {
+            console.log('Connected to server');
             addStatus('Connecting to server...');
             if (userDetails) startChat();
         });
 
         socket.on('disconnect', () => {
-            addStatus('Server disconnected.');
+            console.log('Server disconnected');
+            addStatus('Server disconnected. Please check your backend.');
             isConnected = false;
-            messageInput.disabled = true;
+            stopCall();
+            messageInput.disabled = false;
             typingIndicator.style.display = 'none';
+            setTimeout(() => {
+                if (!socket.connected) {
+                    alert('Failed to connect to the backend. Please ensure the server is running.');
+                }
+            }, 5000);
+        });
+
+        socket.on('connect_error', (err) => {
+            console.error('Socket connection error:', err);
+            addStatus('Failed to connect to server. Retrying...');
         });
 
         function sendMessage() {
             const message = messageInput.value.trim();
-            if (message && isConnected && dataChannel.readyState === 'open') {
-                const messageObj = { type: 'text', content: message, userDetails };
-                dataChannel.send(JSON.stringify(messageObj));
-                addMessage(messageObj, true);
-                messageInput.value = '';
-                messageInput.focus();
+            if (!message) return;
+            if (!isConnected || !dataChannel || dataChannel.readyState !== 'open') {
+                addStatus('Cannot send message: Not connected to a stranger.');
+                return;
             }
+            const messageObj = { type: 'text', content: message, userDetails };
+            dataChannel.send(JSON.stringify(messageObj));
+            addMessage(messageObj, true);
+            messageInput.value = '';
+            messageInput.focus();
         }
 
         function handleKeyPress(event) {
@@ -690,9 +862,10 @@
                 peerConnection.close();
                 peerConnection = null;
                 dataChannel = null;
+                stopCall();
                 isConnected = false;
                 addStatus('Disconnected. Finding a new stranger...');
-                messageInput.disabled = true;
+                messageInput.disabled = false;
                 typingIndicator.style.display = 'none';
                 startChat();
             }
@@ -700,7 +873,6 @@
 
         // Initialize
         fetchCountries();
-        messageInput.disabled = true;
         if (!userDetails) {
             userPopup.style.display = 'flex';
         } else {
@@ -708,4 +880,4 @@
         }
     </script>
 </body>
-  </html>
+</html>
